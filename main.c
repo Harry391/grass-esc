@@ -60,6 +60,7 @@
 #include "mempools.h"
 #include "events.h"
 #include "main.h"
+#include "offline_foc_detect.h"
 
 #ifdef CAN_ENABLE
 #include "comm_can.h"
@@ -92,6 +93,53 @@ static THD_WORKING_AREA(periodic_thread_wa, 256);
 static THD_WORKING_AREA(led_thread_wa, 256);
 static THD_WORKING_AREA(flash_integrity_check_thread_wa, 256);
 static volatile bool m_init_done = false;
+
+#ifndef STARTUP_SOUND_ENABLED
+#define STARTUP_SOUND_ENABLED			1
+#endif
+
+#define STARTUP_SOUND_FREQ_1_HZ			659.25
+#define STARTUP_SOUND_FREQ_2_HZ			659.25
+#define STARTUP_SOUND_FREQ_3_HZ			659.25
+#define STARTUP_SOUND_FREQ_4_HZ			659.25
+#define STARTUP_SOUND_TIME_1_S			0.045
+#define STARTUP_SOUND_TIME_2_S			0.045
+#define STARTUP_SOUND_TIME_3_S			0.045
+#define STARTUP_SOUND_TIME_4_S			0.180
+#define STARTUP_SOUND_GAP_MS			500
+#define STARTUP_SOUND_VOLTAGE			3.0
+
+static void startup_sound_play_motor(int motor) {
+#if STARTUP_SOUND_ENABLED
+	int motor_old = mc_interface_get_motor_thread();
+	mc_interface_select_motor_thread(motor);
+
+	const volatile mc_configuration *conf = mc_interface_get_configuration();
+	if (conf->motor_type == MOTOR_TYPE_FOC &&
+			mc_interface_get_fault() == FAULT_CODE_NONE) {
+		mcpwm_foc_beep(STARTUP_SOUND_FREQ_1_HZ, STARTUP_SOUND_TIME_1_S, STARTUP_SOUND_VOLTAGE);
+		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
+		mcpwm_foc_beep(STARTUP_SOUND_FREQ_2_HZ, STARTUP_SOUND_TIME_2_S, STARTUP_SOUND_VOLTAGE);
+		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
+		mcpwm_foc_beep(STARTUP_SOUND_FREQ_3_HZ, STARTUP_SOUND_TIME_3_S, STARTUP_SOUND_VOLTAGE);
+		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
+		mcpwm_foc_beep(STARTUP_SOUND_FREQ_4_HZ, STARTUP_SOUND_TIME_4_S, STARTUP_SOUND_VOLTAGE);
+		mcpwm_foc_release_motor();
+		chThdSleepMilliseconds(2);
+	}
+
+	mc_interface_select_motor_thread(motor_old);
+#else
+	(void)motor;
+#endif
+}
+
+static void startup_sound_play(void) {
+	startup_sound_play_motor(1);
+#ifdef HW_HAS_DUAL_MOTORS
+	startup_sound_play_motor(2);
+#endif
+}
 
 static THD_FUNCTION(flash_integrity_check_thread, arg) {
 	(void)arg;
@@ -274,6 +322,7 @@ int main(void) {
 	LED_GREEN_OFF();
 
 	conf_general_init();
+	offline_foc_detect_boot_latch();
 
 	if (flash_helper_verify_flash_memory() == FAULT_CODE_FLASH_CORRUPTION)	{
 		// Loop here, it is not safe to run any code
@@ -287,6 +336,7 @@ int main(void) {
 
 	ledpwm_init();
 	mc_interface_init();
+	startup_sound_play();
 
 	commands_init();
 
@@ -355,6 +405,8 @@ int main(void) {
 						strlen(HW_NAME) : CAN_FRAME_MAX_PL_SIZE);
 	}
 #endif
+
+	offline_foc_detect_start_if_requested();
 
 	mempools_free_appconf(appconf);
 

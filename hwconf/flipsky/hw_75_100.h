@@ -24,7 +24,7 @@
 #ifndef HW_75_100_H_
 #define HW_75_100_H_
 
-#define HW_NAME					"75_100"
+#define HW_NAME					"75_200"
 
 // (jaykup) HW properties
 #define HW_HAS_3_SHUNTS
@@ -40,6 +40,27 @@
 #define LED_GREEN_OFF()			palClearPad(LED_GREEN_GPIO, LED_GREEN_PIN)
 #define LED_RED_ON()			palSetPad(LED_RED_GPIO, LED_RED_PIN)
 #define LED_RED_OFF()			palClearPad(LED_RED_GPIO, LED_RED_PIN)
+
+// Pull PC13 low before power-up to latch one offline FOC detection run.
+#define HW_OFFLINE_FOC_DETECT_BOOT
+#define HW_OFFLINE_FOC_DETECT_GPIO		GPIOC
+#define HW_OFFLINE_FOC_DETECT_PIN		13
+#define HW_OFFLINE_FOC_DETECT_LATCH_DELAY_MS			50
+#define HW_OFFLINE_FOC_DETECT_LATCH_SAMPLE_DELAY_MS		5
+#define HW_OFFLINE_FOC_DETECT_LATCH_SAMPLES				12
+#define HW_OFFLINE_FOC_DETECT_LATCH_MIN_LOW				10
+#define HW_OFFLINE_FOC_DETECT_START_DELAY_MS			3000
+#define HW_OFFLINE_FOC_DETECT_POWER_LOSS_W	400.0
+#define HW_OFFLINE_FOC_DETECT_L_IN_CURRENT_MIN			0.0
+#define HW_OFFLINE_FOC_DETECT_L_IN_CURRENT_MAX			0.0
+#define HW_OFFLINE_FOC_DETECT_OPENLOOP_RPM				0.0
+#define HW_OFFLINE_FOC_DETECT_SL_ERPM					0.0
+
+// Default app configuration
+#define APPCONF_APP_TO_USE								APP_PPM
+#define APPCONF_PPM_CTRL_TYPE							PPM_CTRL_TYPE_CURRENT
+#define APPCONF_PPM_RAMP_TIME_POS						20.0
+#define APPCONF_PPM_RAMP_TIME_NEG						2.0
 
 //#define PHASE_FILTER_GPIO		GPIOC
 //#define PHASE_FILTER_PIN		9
@@ -94,8 +115,8 @@
 #define ADC_IND_EXT2			7
 #define ADC_IND_EXT3			10
 #define ADC_IND_TEMP_MOS		8
-//#define ADC_IND_TEMP_MOS_2		15
-//#define ADC_IND_TEMP_MOS_3		16
+#define ADC_IND_TEMP_MOS_2		15
+#define ADC_IND_TEMP_MOS_3		16
 #define ADC_IND_TEMP_MOTOR		9
 #define ADC_IND_VREFINT			12
 
@@ -106,16 +127,16 @@
 #define V_REG					3.3 // (jaykup) updated from measurement
 #endif
 #ifndef VIN_R1
-#define VIN_R1					39000.0 // (jaykup) updated 393 SMD code, 38,800 measured
+#define VIN_R1					56000.0 // (jaykup) updated 393 SMD code, 38,800 measured
 #endif
 #ifndef VIN_R2
-#define VIN_R2					1000.0 // (jaykup) updated 01B code, 1k measured
+#define VIN_R2					2200.0 // (jaykup) updated 01B code, 1k measured
 #endif
 #ifndef CURRENT_AMP_GAIN
 #define CURRENT_AMP_GAIN		20.0 // (jaykup) from current sense amp datasheet
 #endif
 #ifndef CURRENT_SHUNT_RES
-#define CURRENT_SHUNT_RES		0.0005 // (jaykup) updated
+#define CURRENT_SHUNT_RES		(0.0005/2.0) // (jaykup) updated
 #endif
 
 // Input voltage
@@ -144,7 +165,7 @@
 #ifndef CURR2_DOUBLE_SAMPLE
 #define CURR2_DOUBLE_SAMPLE		0
 #endif
-#ifndef CURR3_DOUBLE_SAMPLE
+#ifndef CURR3_DOUBLE_SAMPLEmake 
 #define CURR3_DOUBLE_SAMPLE		0
 #endif
 
@@ -238,14 +259,14 @@
 #define READ_HALL3()			palReadPad(HW_HALL_ENC_GPIO3, HW_HALL_ENC_PIN3)
 
 // Override dead time. See the stm32f4 reference manual for calculating this value.
-#define HW_DEAD_TIME_NSEC		660.0
+#define HW_DEAD_TIME_NSEC		1200.0
 
 // Default setting overrides
 #ifndef MCCONF_L_MIN_VOLTAGE
 #define MCCONF_L_MIN_VOLTAGE			8.0	// (jaykup) (ypl firmware)
 #endif
 #ifndef MCCONF_L_MAX_VOLTAGE
-#define MCCONF_L_MAX_VOLTAGE			90.0	// (jaykup) (ypl firmware)
+#define MCCONF_L_MAX_VOLTAGE			120.0	// (jaykup) (ypl firmware)
 #endif
 #ifndef MCCONF_DEFAULT_MOTOR_TYPE
 #define MCCONF_DEFAULT_MOTOR_TYPE		MOTOR_TYPE_FOC
@@ -254,22 +275,22 @@
 #define MCCONF_FOC_F_ZV					30000.0 // (jaykup) (flipsky firmware)
 #endif
 #ifndef MCCONF_L_MAX_ABS_CURRENT
-#define MCCONF_L_MAX_ABS_CURRENT		150.0	// (jaykup) (flipsky firmware) The maximum absolute current above which a fault is generated
+#define MCCONF_L_MAX_ABS_CURRENT		1000.0	// (jaykup) (flipsky firmware) The maximum absolute current above which a fault is generated
 #endif
 #ifndef MCCONF_FOC_SAMPLE_V0_V7
-#define MCCONF_FOC_SAMPLE_V0_V7			false	// (jaykup) unit has 3 battery shunts so this needs to be off - Run control loop in both v0 and v7 (requires phase shunts)
+#define MCCONF_FOC_SAMPLE_V0_V7			true	// (jaykup) unit has 3 battery shunts so this needs to be off - Run control loop in both v0 and v7 (requires phase shunts)
 #endif
 #ifndef MCCONF_L_IN_CURRENT_MAX
-#define MCCONF_L_IN_CURRENT_MAX			100.0	// (jaykup) (flipsky firmware) Input current limit in Amperes (Upper)
+#define MCCONF_L_IN_CURRENT_MAX			1200.0	// (jaykup) (flipsky firmware) Input current limit in Amperes (Upper)
 #endif
 #ifndef MCCONF_L_IN_CURRENT_MIN
-#define MCCONF_L_IN_CURRENT_MIN			-100.0	// (jaykup) (flipsky firmware) Input current limit in Amperes (Lower)
+#define MCCONF_L_IN_CURRENT_MIN			-1200.0	// (jaykup) (flipsky firmware) Input current limit in Amperes (Lower)
 #endif
 #ifndef MCCONF_L_RPM_MAX
-#define MCCONF_L_RPM_MAX				150000.0	// (jaykup) (flipsky firmware) The motor speed limit (Upper)
+#define MCCONF_L_RPM_MAX				250000.0	// (jaykup) (flipsky firmware) The motor speed limit (Upper)
 #endif
 #ifndef MCCONF_L_RPM_MIN
-#define MCCONF_L_RPM_MIN				-150000.0	// (jaykup) (flipsky firmware) The motor speed limit (Lower)
+#define MCCONF_L_RPM_MIN				-250000.0	// (jaykup) (flipsky firmware) The motor speed limit (Lower)
 #endif
 #ifndef MCCONF_SI_BATTERY_CELLS
 #define MCCONF_SI_BATTERY_CELLS			12 // (jaykup) Battery Cells
@@ -280,17 +301,25 @@
 
 // (jaykup) Suggested defaults
 #ifndef MCCONF_FOC_PHASE_FILTER_ENABLE
-#define MCCONF_FOC_PHASE_FILTER_ENABLE  false // Use phase voltage filters when available
+#define MCCONF_FOC_PHASE_FILTER_ENABLE  true // Use phase voltage filters when available
 #endif
+#ifndef MCCONF_FOC_CURRENT_SAMPLE_MODE
+#define MCCONF_FOC_CURRENT_SAMPLE_MODE  FOC_CURRENT_SAMPLE_MODE_ALL_SENSORS
+#endif
+#ifndef MCCONF_L_SLOW_ABS_OVERCURRENT
+#define MCCONF_L_SLOW_ABS_OVERCURRENT   true
+#endif
+#define HW_FIXED_FOC_CURRENT_SAMPLE_MODE FOC_CURRENT_SAMPLE_MODE_ALL_SENSORS
+#define HW_FIXED_L_SLOW_ABS_CURRENT      true
 
 // Setting limits
-#define HW_LIM_CURRENT			-120.0, 120.0 // (jaykup) phase amps (Flipsky states 120 max phase amps.)
-#define HW_LIM_CURRENT_IN		-120.0, 120.0 // (jaykup) battery amps (Flipsky states 100 max battery amps, but their firmware is at 120A)
-#define HW_LIM_CURRENT_ABS		0.0, 160.0 // (jaykup) abs phase amps (Flipsky firmware max is 160A)
+#define HW_LIM_CURRENT			-1200.0, 1200.0 // (jaykup) phase amps (Flipsky states 120 max phase amps.)
+#define HW_LIM_CURRENT_IN		-1200.0, 1200.0 // (jaykup) battery amps (Flipsky states 100 max battery amps, but their firmware is at 120A)
+#define HW_LIM_CURRENT_ABS		0.0, 2000.0 // (jaykup) abs phase amps (Flipsky firmware max is 160A)
 #define HW_LIM_VIN				6.0, 120.0 // (jaykup) (ypl firmware)
-#define HW_LIM_ERPM				-200e3, 200e3 // (jaykup) (flipsky firmware)
+#define HW_LIM_ERPM				-150e3, 150e3 // (jaykup) (flipsky firmware)
 #define HW_LIM_DUTY_MIN			0.0, 0.1
 #define HW_LIM_DUTY_MAX			0.0, 0.99
-#define HW_LIM_TEMP_FET			-40.0, 110.0
+#define HW_LIM_TEMP_FET			-10.0, 110.0
 
 #endif /* HW_75_100_H_ */

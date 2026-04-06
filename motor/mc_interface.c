@@ -320,6 +320,13 @@ void mc_interface_set_configuration(mc_configuration *configuration) {
 #endif
 #endif
 
+#ifdef HW_FIXED_FOC_CURRENT_SAMPLE_MODE
+	configuration->foc_current_sample_mode = HW_FIXED_FOC_CURRENT_SAMPLE_MODE;
+#endif
+#ifdef HW_FIXED_L_SLOW_ABS_CURRENT
+	configuration->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
+#endif
+
 	if (motor->m_conf.m_sensor_port_mode != configuration->m_sensor_port_mode) {
 		encoder_deinit();
 		encoder_init(configuration);
@@ -1065,6 +1072,17 @@ float mc_interface_get_rpm(void) {
 	return DIR_MULT * ret;
 }
 
+float mc_interface_get_rpm_mechanical(void) {
+	const volatile mc_configuration *conf = mc_interface_get_configuration();
+	const float pole_pairs = (float)conf->si_motor_poles / 2.0;
+
+	if (pole_pairs < 0.5) {
+		return mc_interface_get_rpm();
+	}
+
+	return mc_interface_get_rpm() / pole_pairs;
+}
+
 /**
  * Get the amount of amp hours drawn from the input source.
  *
@@ -1609,7 +1627,7 @@ float mc_interface_get_speed(void) {
 		return hw_get_speed();
 #else
 		const volatile mc_configuration *conf = mc_interface_get_configuration();
-		const float rpm = mc_interface_get_rpm() / (conf->si_motor_poles / 2.0);
+		const float rpm = mc_interface_get_rpm_mechanical();
 		return (rpm / 60.0) * conf->si_wheel_diameter * M_PI / conf->si_gear_ratio;
 #endif
 	}
@@ -2681,13 +2699,13 @@ static void run_timer_tasks(volatile motor_if_state_t *motor) {
 	if (motor->m_conf.foc_current_sample_mode != FOC_CURRENT_SAMPLE_MODE_HIGH_CURRENT  && dc_cal_done) { // This won't work when high current sampling is used
 		motor->m_motor_current_unbalance = mc_interface_get_abs_motor_current_unbalance();
 
-		if (fabsf(motor->m_motor_current_unbalance) > fabsf(MCCONF_MAX_CURRENT_UNBALANCE)) {
+		if (fabsf(motor->m_motor_current_unbalance) > fabsf(MCCONF_MAX_CURRENT_UNBALANCE)* 2.0f) {
 			UTILS_LP_FAST(motor->m_motor_current_unbalance_error_rate, 1.0, (1 / 1000.0));
 		} else {
 			UTILS_LP_FAST(motor->m_motor_current_unbalance_error_rate, 0.0, (1 / 1000.0));
 		}
 
-		if (motor->m_motor_current_unbalance_error_rate > MCCONF_MAX_CURRENT_UNBALANCE_RATE) {
+		if (motor->m_motor_current_unbalance_error_rate > MCCONF_MAX_CURRENT_UNBALANCE_RATE* 2.0f) {
 			mc_interface_fault_stop(FAULT_CODE_UNBALANCED_CURRENTS, !is_motor_1, false);
 		}
 	}

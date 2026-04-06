@@ -115,17 +115,17 @@
 
 //The voltage dividing acquisition circuit on the Makerbase VESC motherboard is 220K and 4.7K resistors.
 #ifndef VIN_R1
-#define VIN_R1				    220000.0 
+#define VIN_R1				    56000.0 
 #endif
 #ifndef VIN_R2
-#define VIN_R2				    4700.0 
+#define VIN_R2				    2200.0 
 #endif
 
 #ifndef CURRENT_AMP_GAIN
 #define CURRENT_AMP_GAIN		20.0 
 #endif
 #ifndef CURRENT_SHUNT_RES
-#define CURRENT_SHUNT_RES		(0.0001) 
+#define CURRENT_SHUNT_RES		(0.0005 / 3.0) 
 #endif
 
 // Input voltage
@@ -251,7 +251,7 @@
 #define MCCONF_L_MIN_VOLTAGE			12.0	// Minimum input voltage
 #endif
 #ifndef MCCONF_L_MAX_VOLTAGE
-#define MCCONF_L_MAX_VOLTAGE			110.0	// Maximum input voltage
+#define MCCONF_L_MAX_VOLTAGE			80.0	// Maximum input voltage
 #endif
 #ifndef MCCONF_DEFAULT_MOTOR_TYPE
 #define MCCONF_DEFAULT_MOTOR_TYPE		MOTOR_TYPE_FOC
@@ -260,7 +260,7 @@
 #define MCCONF_FOC_F_ZV				    30000.0 
 #endif
 #ifndef MCCONF_L_MAX_ABS_CURRENT
-#define MCCONF_L_MAX_ABS_CURRENT		650.0	// The maximum absolute current above which a fault is generated
+#define MCCONF_L_MAX_ABS_CURRENT		400.0	// The maximum absolute current above which a fault is generated
 #endif
 #ifndef MCCONF_FOC_SAMPLE_V0_V7
 #define MCCONF_FOC_SAMPLE_V0_V7			false	// Run control loop in both v0 and v7 (requires phase shunts)
@@ -273,10 +273,10 @@
 #endif
 
 // Setting limits
-#define HW_LIM_CURRENT			-500.0, 500.0 
-#define HW_LIM_CURRENT_IN		-500.0, 500.0 
-#define HW_LIM_CURRENT_ABS		0.0, 650 
-#define HW_LIM_VIN			    6.0, 120.0 
+#define HW_LIM_CURRENT			-300.0, 300.0 
+#define HW_LIM_CURRENT_IN		-300.0, 300.0 
+#define HW_LIM_CURRENT_ABS		0.0, 450 
+#define HW_LIM_VIN			    6.0, 90.0 
 #define HW_LIM_ERPM			    -200e3, 200e3 
 #define HW_LIM_DUTY_MIN			0.0, 0.1
 #define HW_LIM_DUTY_MAX			0.0, 0.99

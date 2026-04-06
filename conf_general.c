@@ -432,6 +432,13 @@ __attribute__((section(".text2"))) void conf_general_read_mc_configuration(mc_co
 	if (!is_ok) {
 		confgenerator_set_defaults_mcconf(conf);
 	}
+
+#ifdef HW_FIXED_FOC_CURRENT_SAMPLE_MODE
+	conf->foc_current_sample_mode = HW_FIXED_FOC_CURRENT_SAMPLE_MODE;
+#endif
+#ifdef HW_FIXED_L_SLOW_ABS_CURRENT
+	conf->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
+#endif
 }
 
 /**
@@ -454,6 +461,13 @@ __attribute__((section(".text2"))) bool conf_general_store_mc_configuration(mc_c
 	bool is_ok = true;
 	uint8_t *conf_addr = (uint8_t*)conf;
 	unsigned int base = is_motor_2 ? EEPROM_BASE_MCCONF_2 : EEPROM_BASE_MCCONF;
+
+#ifdef HW_FIXED_FOC_CURRENT_SAMPLE_MODE
+	conf->foc_current_sample_mode = HW_FIXED_FOC_CURRENT_SAMPLE_MODE;
+#endif
+#ifdef HW_FIXED_L_SLOW_ABS_CURRENT
+	conf->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
+#endif
 
 	conf->crc = mc_interface_calc_crc(conf, is_motor_2);
 
@@ -1892,8 +1906,6 @@ int conf_general_detect_apply_all_foc(float max_power_loss,
 			res = false;
 		}
 	}
-
-	res = true;
 
 #ifdef HW_HAS_DUAL_MOTORS
 	worker_wait();

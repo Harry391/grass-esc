@@ -21,7 +21,7 @@
 #define HW_75_300_CORE_H_
 
 #ifdef HW75_300_REV_3
-  #define HW_NAME					"75_300_R3"
+  #define HW_NAME					"60_75_300_R3"
 #elif defined(HW75_300_REV_2)
   #define HW_NAME					"75_300_R2"
 #elif defined(HW75_300_REV_1)
@@ -32,8 +32,8 @@
 
 // HW properties
 #define HW_HAS_3_SHUNTS
-#define HW_HAS_PHASE_SHUNTS
-#define HW_HAS_PHASE_FILTERS
+//#define HW_HAS_PHASE_SHUNTS
+//#define HW_HAS_PHASE_FILTERS
 
 // Macros
 #ifdef HW75_300_VEDDER_FIRST_PCB
@@ -125,7 +125,7 @@
 
 // Component parameters (can be overridden)
 #ifndef V_REG
-#define V_REG					3.44
+#define V_REG					3.3
 #endif
 #ifndef VIN_R1
 #define VIN_R1					56000.0
@@ -137,7 +137,7 @@
 #define CURRENT_AMP_GAIN		20.0
 #endif
 #ifndef CURRENT_SHUNT_RES
-#define CURRENT_SHUNT_RES		(0.0005 / 3.0)
+#define CURRENT_SHUNT_RES		(0.0005 / 2.0)
 #endif
 
 // Input voltage
@@ -276,7 +276,7 @@
 #define MCCONF_L_MIN_VOLTAGE			12.0		// Minimum input voltage
 #endif
 #ifndef MCCONF_L_MAX_VOLTAGE
-#define MCCONF_L_MAX_VOLTAGE			72.0	// Maximum input voltage
+#define MCCONF_L_MAX_VOLTAGE			100.0	// Maximum input voltage
 #endif
 #ifndef MCCONF_DEFAULT_MOTOR_TYPE
 #define MCCONF_DEFAULT_MOTOR_TYPE		MOTOR_TYPE_FOC
@@ -301,7 +301,7 @@
 #define HW_LIM_CURRENT			-400.0, 400.0
 #define HW_LIM_CURRENT_IN		-400.0, 400.0
 #define HW_LIM_CURRENT_ABS		0.0, 480.0
-#define HW_LIM_VIN				11.0, 72.0
+#define HW_LIM_VIN				11.0, 100.0
 #define HW_LIM_ERPM				-200e3, 200e3
 #define HW_LIM_DUTY_MIN			0.0, 0.1
 #define HW_LIM_DUTY_MAX			0.0, 0.99
