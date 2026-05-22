@@ -76,15 +76,14 @@
 #define APPCONF_CAN_STATUS_MSGS_R2			0
 #endif
 
-// The default app is UART in case the UART port is used for
-// firmware updates.
+// Default to PPM input for this firmware build.
 #ifndef APPCONF_APP_TO_USE
-#define APPCONF_APP_TO_USE					APP_UART
+#define APPCONF_APP_TO_USE					APP_PPM
 #endif
 
 // PPM app configureation
 #ifndef APPCONF_PPM_CTRL_TYPE
-#define APPCONF_PPM_CTRL_TYPE				PPM_CTRL_TYPE_NONE
+#define APPCONF_PPM_CTRL_TYPE				PPM_CTRL_TYPE_CURRENT_BRAKE_REV_HYST
 #endif
 #ifndef APPCONF_PPM_PID_MAX_ERPM
 #define APPCONF_PPM_PID_MAX_ERPM			15000

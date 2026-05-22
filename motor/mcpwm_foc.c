@@ -42,6 +42,10 @@
 #include "virtual_motor.h"
 #include "foc_math.h"
 
+#ifndef HW_FOC_SENSORLESS_STARTUP_MIN_IQ
+#define HW_FOC_SENSORLESS_STARTUP_MIN_IQ 0.0f
+#endif
+
 // Private variables
 static volatile bool m_dccal_done = false;
 static volatile float m_last_adc_isr_duration;
@@ -3420,6 +3424,14 @@ void mcpwm_foc_adc_int_handler(void *p, uint32_t flags) {
 					if (conf_now->foc_sl_openloop_max_q > conf_now->cc_min_current) {
 						utils_truncate_number_abs(&iq_set_tmp, conf_now->foc_sl_openloop_max_q);
 					}
+
+#if HW_FOC_SENSORLESS_STARTUP_MIN_IQ > 0.0f
+					if (motor_now->m_control_mode != CONTROL_MODE_CURRENT_BRAKE &&
+							iq_set_tmp > 0.0f &&
+							iq_set_tmp < HW_FOC_SENSORLESS_STARTUP_MIN_IQ) {
+						iq_set_tmp = HW_FOC_SENSORLESS_STARTUP_MIN_IQ;
+					}
+#endif
 				} else {
 					motor_now->m_motor_state.phase = motor_now->m_phase_now_observer;
 				}

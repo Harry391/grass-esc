@@ -38,6 +38,7 @@
 #include "mempools.h"
 #include "crc.h"
 #include "firmware_metadata.h"
+#include "offline_foc_detect.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -220,6 +221,9 @@ __attribute__((section(".text2"))) void terminal_process_string(char *str) {
 #ifdef HW_HAS_GATE_DRIVER_SUPPLY_MONITOR
 		commands_printf("Gate driver power supply output voltage: %.2f\n", (double)GET_GATE_DRIVER_SUPPLY_VOLTAGE());
 #endif
+	} else if (strcmp(argv[0], "offline_foc_detect") == 0) {
+		commands_printf("Starting offline FOC detect...");
+		offline_foc_detect_request_start();
 	} else if (strcmp(argv[0], "param_detect") == 0) {
 		// Use COMM_MODE_DELAY and try to figure out the motor parameters.
 		if (argc == 4) {

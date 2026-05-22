@@ -98,32 +98,58 @@ static volatile bool m_init_done = false;
 #define STARTUP_SOUND_ENABLED			1
 #endif
 
-#define STARTUP_SOUND_FREQ_1_HZ			659.25
-#define STARTUP_SOUND_FREQ_2_HZ			659.25
-#define STARTUP_SOUND_FREQ_3_HZ			659.25
-#define STARTUP_SOUND_FREQ_4_HZ			659.25
-#define STARTUP_SOUND_TIME_1_S			0.045
-#define STARTUP_SOUND_TIME_2_S			0.045
-#define STARTUP_SOUND_TIME_3_S			0.045
-#define STARTUP_SOUND_TIME_4_S			0.180
-#define STARTUP_SOUND_GAP_MS			500
-#define STARTUP_SOUND_VOLTAGE			3.0
+#define STARTUP_SOUND_FREQ_HZ			659.25
+#define STARTUP_SOUND_TIME_S			0.200
+#define STARTUP_SOUND_GAP_MS			200
+#define STARTUP_SOUND_VOLTAGE			6.0
+#define STARTUP_SOUND_CELL_VOLTAGE		3.7
+#define STARTUP_SOUND_CELL_MIN			1
+#define STARTUP_SOUND_CELL_MAX			30
+#define STARTUP_SOUND_VOLTAGE_SAMPLES	16
+#define STARTUP_SOUND_VOLTAGE_SAMPLE_MS	2
 
-static void startup_sound_play_motor(int motor) {
+static int startup_sound_detect_cells(void) {
+#if STARTUP_SOUND_ENABLED
+	float v_in = 0.0;
+
+	for (int i = 0;i < STARTUP_SOUND_VOLTAGE_SAMPLES;i++) {
+		v_in += GET_INPUT_VOLTAGE();
+		chThdSleepMilliseconds(STARTUP_SOUND_VOLTAGE_SAMPLE_MS);
+	}
+
+	v_in /= (float)STARTUP_SOUND_VOLTAGE_SAMPLES;
+
+	int cells = (int)floorf((v_in / STARTUP_SOUND_CELL_VOLTAGE) + 0.5);
+
+	if (cells < STARTUP_SOUND_CELL_MIN) {
+		cells = STARTUP_SOUND_CELL_MIN;
+	} else if (cells > STARTUP_SOUND_CELL_MAX) {
+		cells = STARTUP_SOUND_CELL_MAX;
+	}
+
+	return cells;
+#else
+	return 0;
+#endif
+}
+
+static void startup_sound_play_motor(int motor, int cells) {
 #if STARTUP_SOUND_ENABLED
 	int motor_old = mc_interface_get_motor_thread();
 	mc_interface_select_motor_thread(motor);
 
 	const volatile mc_configuration *conf = mc_interface_get_configuration();
 	if (conf->motor_type == MOTOR_TYPE_FOC &&
-			mc_interface_get_fault() == FAULT_CODE_NONE) {
-		mcpwm_foc_beep(STARTUP_SOUND_FREQ_1_HZ, STARTUP_SOUND_TIME_1_S, STARTUP_SOUND_VOLTAGE);
-		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
-		mcpwm_foc_beep(STARTUP_SOUND_FREQ_2_HZ, STARTUP_SOUND_TIME_2_S, STARTUP_SOUND_VOLTAGE);
-		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
-		mcpwm_foc_beep(STARTUP_SOUND_FREQ_3_HZ, STARTUP_SOUND_TIME_3_S, STARTUP_SOUND_VOLTAGE);
-		chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
-		mcpwm_foc_beep(STARTUP_SOUND_FREQ_4_HZ, STARTUP_SOUND_TIME_4_S, STARTUP_SOUND_VOLTAGE);
+			mc_interface_get_fault() == FAULT_CODE_NONE &&
+			cells > 0) {
+		for (int i = 0;i < cells;i++) {
+			mcpwm_foc_beep(STARTUP_SOUND_FREQ_HZ, STARTUP_SOUND_TIME_S, STARTUP_SOUND_VOLTAGE);
+
+			if (i < (cells - 1)) {
+				chThdSleepMilliseconds(STARTUP_SOUND_GAP_MS);
+			}
+		}
+
 		mcpwm_foc_release_motor();
 		chThdSleepMilliseconds(2);
 	}
@@ -131,13 +157,16 @@ static void startup_sound_play_motor(int motor) {
 	mc_interface_select_motor_thread(motor_old);
 #else
 	(void)motor;
+	(void)cells;
 #endif
 }
 
 static void startup_sound_play(void) {
-	startup_sound_play_motor(1);
+	const int cells = startup_sound_detect_cells();
+
+	startup_sound_play_motor(1, cells);
 #ifdef HW_HAS_DUAL_MOTORS
-	startup_sound_play_motor(2);
+	startup_sound_play_motor(2, cells);
 #endif
 }
 
@@ -347,6 +376,38 @@ int main(void) {
 	app_uartcomm_initialize();
 	app_configuration *appconf = mempools_alloc_appconf();
 	conf_general_read_app_configuration(appconf);
+
+#ifdef APPCONF_BOOT_MIGRATE_TO_PPM_HYST_REV_BRAKE
+	eeprom_var appconf_migrate_flag;
+	bool appconf_migrate_done = conf_general_read_eeprom_var_hw(&appconf_migrate_flag,
+			APPCONF_BOOT_MIGRATE_FLAG_EEPROM_ADDR) &&
+			appconf_migrate_flag.as_i32 == 1;
+
+	if (!appconf_migrate_done) {
+		bool appconf_migrated = false;
+
+		if (appconf->app_to_use == APP_UART) {
+			appconf->app_to_use = APP_PPM;
+			appconf_migrated = true;
+		}
+
+		if (appconf->app_to_use == APP_PPM &&
+				(appconf->app_ppm_conf.ctrl_type == PPM_CTRL_TYPE_NONE ||
+				appconf->app_ppm_conf.ctrl_type == PPM_CTRL_TYPE_CURRENT)) {
+			appconf->app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_BRAKE_REV_HYST;
+			appconf_migrated = true;
+		}
+
+		if (appconf_migrated) {
+			conf_general_store_app_configuration(appconf);
+		}
+
+		appconf_migrate_flag.as_i32 = 1;
+		conf_general_store_eeprom_var_hw(&appconf_migrate_flag,
+				APPCONF_BOOT_MIGRATE_FLAG_EEPROM_ADDR);
+	}
+#endif
+
 	app_uartcomm_start(UART_PORT_BUILTIN);
 	app_uartcomm_start(UART_PORT_EXTRA_HEADER);
 	app_set_configuration(appconf);

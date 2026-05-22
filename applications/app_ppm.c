@@ -54,12 +54,20 @@ static float input_val = 0.0;
 static volatile float direction_hyst = 0;
 static volatile bool ppm_detached = false;
 static volatile float ppm_override = 0.0;
+static volatile bool direction_switch_allowed = false;
+static volatile int direction_hyst_active_dir = 0;
+static volatile int direction_hyst_pending_dir = 0;
+static volatile bool direction_hyst_idle_done = false;
 
 // Private functions
 
 void app_ppm_configure(ppm_config *conf) {
 	config = *conf;
 	pulses_without_power = 0;
+	direction_switch_allowed = false;
+	direction_hyst_active_dir = 0;
+	direction_hyst_pending_dir = 0;
+	direction_hyst_idle_done = false;
 
 	if (is_running) {
 		servodec_set_pulse_options(config.pulse_start, config.pulse_end, config.median_filter);
@@ -217,78 +225,82 @@ static THD_FUNCTION(ppm_thread, arg) {
 		bool current_mode_brake = false;
 		bool send_current = false;
 		bool send_duty = false;
-		static bool force_brake = true;
-		static int8_t did_idle_once = 0; //0 = haven't idle ;1 = idle once ; 2 = idle twice
 		float rpm_local = mc_interface_get_rpm();
 		float rpm_lowest = rpm_local;
 		float rpm_highest = rpm_local;
 
 		switch (config.ctrl_type) {
-		case PPM_CTRL_TYPE_CURRENT_BRAKE_REV_HYST:
+		case PPM_CTRL_TYPE_CURRENT_BRAKE_REV_HYST: {
 			current_mode = true;
 
-			// Hysteresis 20 % of actual RPM
-			if (force_brake) {
-				if (rpm_local < config.max_erpm_for_dir - direction_hyst) { // for 2500 it's 2000
-					force_brake = false;
-					did_idle_once = 0;
-				}
-			} else {
-				if (rpm_local > config.max_erpm_for_dir + direction_hyst) { // for 2500 it's 3000
-					force_brake = true;
-					did_idle_once = 0;
-				}
+			const float rpm_abs = fabsf(rpm_local);
+			const float switch_rpm_low = fmaxf(config.max_erpm_for_dir - direction_hyst, 0.0);
+			const float switch_rpm_high = config.max_erpm_for_dir + direction_hyst;
+			int requested_dir = 0;
+
+			if (servo_val > 0.0) {
+				requested_dir = 1;
+			} else if (servo_val < 0.0) {
+				requested_dir = -1;
 			}
 
-			if (servo_val >= 0.0) {
-				if (servo_val == 0.0) {
-					// if there was a idle in between then allow going backwards
-					if (did_idle_once == 1 && !force_brake) {
-						did_idle_once = 2;
-					}
-				} else{
-					// accelerated forward or fast enough at least
-					if (rpm_local > -config.max_erpm_for_dir){ // for 2500 it's -2500
-						did_idle_once = 0;
-					}
+			if (config.max_erpm_for_dir <= 0.0) {
+				direction_switch_allowed = rpm_abs < 50.0;
+			} else if (direction_switch_allowed) {
+				if (rpm_abs > switch_rpm_high) {
+					direction_switch_allowed = false;
 				}
+			} else if (rpm_abs < switch_rpm_low) {
+				direction_switch_allowed = true;
+			}
 
-				if (rpm_now >= 0.0) { //Accelerate
+			if (direction_hyst_active_dir == 0 && direction_hyst_pending_dir == 0 &&
+					requested_dir != 0) {
+				direction_hyst_active_dir = requested_dir;
+			}
+
+			if (requested_dir == 0) {
+				if (direction_hyst_pending_dir != 0 && direction_switch_allowed) {
+					direction_hyst_idle_done = true;
+				}
+			} else if (direction_hyst_pending_dir != 0 &&
+					requested_dir == direction_hyst_active_dir) {
+				direction_hyst_pending_dir = 0;
+				direction_hyst_idle_done = false;
+			}
+
+			if (requested_dir != 0 && direction_hyst_active_dir == 0) {
+				direction_hyst_active_dir = requested_dir;
+			}
+
+			if (requested_dir != 0 &&
+					requested_dir == direction_hyst_active_dir &&
+					direction_hyst_pending_dir == 0) {
+				if (requested_dir > 0) {
 					current = servo_val * mcconf->lo_current_max;
-				} else { //Brake
+				} else {
 					current = servo_val * fabsf(mcconf->lo_current_min);
 				}
+			} else if (requested_dir != 0) {
+				if (direction_hyst_pending_dir == 0 ||
+						direction_hyst_pending_dir != requested_dir) {
+					direction_hyst_pending_dir = requested_dir;
+					direction_hyst_idle_done = false;
+				}
 
-			} else {
-				// too fast
-				if (force_brake){
-					current_mode_brake = true;
-				} else {
-					// not too fast backwards
-					if (rpm_local > -config.max_erpm_for_dir) { // for 2500 it's -2500
-						// first time that we brake and we are not too fast
-						if (did_idle_once != 2) {
-							did_idle_once = 1;
-							current_mode_brake = true;
-						}
-					// too fast backwards
+				if (direction_switch_allowed && direction_hyst_idle_done) {
+					direction_hyst_active_dir = requested_dir;
+					direction_hyst_pending_dir = 0;
+					direction_hyst_idle_done = false;
+
+					if (requested_dir > 0) {
+						current = servo_val * mcconf->lo_current_max;
 					} else {
-						// if brake was active already
-						if (did_idle_once == 1) {
-							current_mode_brake = true;
-						} else {
-							// it's ok to go backwards now braking would be strange now
-							did_idle_once = 2;
-						}
+						current = servo_val * fabsf(mcconf->lo_current_min);
 					}
-				}
-
-				if (current_mode_brake) {
-					// braking
-					current = fabsf(servo_val * mcconf->lo_current_min);
 				} else {
-					// reverse acceleration
-					current = servo_val * fabsf(mcconf->lo_current_min);
+					current_mode_brake = true;
+					current = fabsf(servo_val * mcconf->lo_current_min);
 				}
 			}
 
@@ -297,6 +309,7 @@ static THD_FUNCTION(ppm_thread, arg) {
 			}
 
 			break;
+		}
 		case PPM_CTRL_TYPE_CURRENT:
 		case PPM_CTRL_TYPE_CURRENT_NOREV:
 			current_mode = true;

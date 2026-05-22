@@ -171,6 +171,7 @@ typedef enum {
 	FAULT_CODE_PHASE_FILTER,
 	FAULT_CODE_ENCODER_FAULT,
 	FAULT_CODE_LV_OUTPUT_FAULT,
+	FAULT_CODE_MOTOR_STALL,
 } mc_fault_code;
 
 typedef enum {
@@ -1128,6 +1129,7 @@ typedef enum {
 	COMM_CAN_UPDATE_BAUD_ALL				= 158,
 
 	COMM_MOTOR_ESTOP						= 159,
+	COMM_PRIVATE_FW_VERSION				= 200,
 } COMM_PACKET_ID;
 
 // CAN commands

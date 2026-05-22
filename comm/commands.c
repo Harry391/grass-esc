@@ -89,7 +89,6 @@ static mutex_t terminal_mutex;
 static volatile int fw_version_sent_cnt = 0;
 static bool is_initialized = false;
 static int nrf_flags = 0;
-
 void commands_init(void) {
 	chMtxObjectInit(&print_mutex);
 	chMtxObjectInit(&terminal_mutex);
@@ -179,6 +178,7 @@ void commands_unregister_reply_func(void(*reply_func)(unsigned char *data, unsig
 	if (send_func_can_fwd == reply_func) {
 		send_func_can_fwd = NULL;
 	}
+
 }
 
 static void send_func_dummy(unsigned char *data, unsigned int len) {
@@ -228,7 +228,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 	}
 
 	switch (packet_id) {
-	case COMM_FW_VERSION: {
+	case COMM_PRIVATE_FW_VERSION: {
 		int32_t ind = 0;
 		uint8_t send_buffer[65];
 		send_buffer[ind++] = COMM_FW_VERSION;

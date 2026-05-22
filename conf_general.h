@@ -21,8 +21,8 @@
 #define CONF_GENERAL_H_
 
 // Firmware version
-#define FW_VERSION_MAJOR			6
-#define FW_VERSION_MINOR			06
+#define FW_VERSION_MAJOR			1
+#define FW_VERSION_MINOR			0
 // Set to 0 for building a release and iterate during beta test builds
 #define FW_TEST_VERSION_NUMBER		4
 

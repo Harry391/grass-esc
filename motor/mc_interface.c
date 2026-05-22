@@ -48,6 +48,25 @@
 
 // Macros
 #define DIR_MULT		(motor_now()->m_conf.m_invert_direction ? -1.0 : 1.0)
+#define STALL_PROTECT_ENABLE			0
+#define STALL_MIN_ERPM					400.0f
+#define STALL_MIN_CURRENT				3.0f
+#define STALL_MIN_DUTY					0.08f
+#define STALL_SPEED_RATIO				0.2f
+#define STALL_HOLD_MS					50
+#define STALL_HIGH_DUTY				0.30f
+#define STALL_HIGH_CURRENT_RATIO		0.60f
+#define STALL_HIGH_SPEED_RATIO			0.40f
+#define STALL_HIGH_HOLD_MS				30
+#define STALL_STARTUP_FAIL_ERPM			600.0f
+#define STALL_STARTUP_FAIL_MS			200
+#define STALL_STARTUP_BLANK_MS			150
+#define STALL_REF_DECAY_FILTER			0.005f
+#define STALL_FAULT_BEEP_COUNT			5
+#define STALL_FAULT_BEEP_FREQ_HZ		659.25f
+#define STALL_FAULT_BEEP_TIME_S			0.10f
+#define STALL_FAULT_BEEP_GAP_MS			120
+#define STALL_FAULT_BEEP_VOLTAGE		6.0f
 
 // Global variables
 volatile uint16_t ADC_Value[HW_ADC_CHANNELS + HW_ADC_CHANNELS_EXTRA];
@@ -90,6 +109,12 @@ typedef struct {
 	float m_input_voltage_filtered_slower;
 	float m_temp_override;
 	float m_i_in_filter;
+	float m_stall_rpm_ref;
+	int m_stall_active_ms;
+	int m_stall_high_load_ms;
+	int m_stall_output_ms;
+	int m_stall_blank_ms;
+	int8_t m_stall_rpm_sign;
 
 	// Backup data counters
 	uint64_t m_odometer_last;
@@ -146,6 +171,11 @@ static volatile fault_data_local m_fault_data = {0, FAULT_CODE_NONE, 0, 0, {0, 0
 static void update_override_limits(volatile motor_if_state_t *motor, volatile mc_configuration *conf);
 static void run_timer_tasks(volatile motor_if_state_t *motor);
 static void update_stats(volatile motor_if_state_t *motor);
+#if STALL_PROTECT_ENABLE
+static void reset_stall_protection(volatile motor_if_state_t *motor);
+#endif
+static void update_stall_protection(volatile motor_if_state_t *motor);
+static void play_stall_fault_beep(void);
 static volatile motor_if_state_t *motor_now(void);
 static void send_sample_block(int ind, int offset);
 
@@ -325,6 +355,27 @@ void mc_interface_set_configuration(mc_configuration *configuration) {
 #endif
 #ifdef HW_FIXED_L_SLOW_ABS_CURRENT
 	configuration->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
+#endif
+#ifdef HW_FIXED_L_CURRENT_MAX
+	configuration->l_current_max = HW_FIXED_L_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_CURRENT_MIN
+	configuration->l_current_min = HW_FIXED_L_CURRENT_MIN;
+#endif
+#ifdef HW_FIXED_L_ABS_CURRENT_MAX
+	configuration->l_abs_current_max = HW_FIXED_L_ABS_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_MIN_VIN
+	configuration->l_min_vin = HW_FIXED_L_MIN_VIN;
+#endif
+#ifdef HW_FIXED_L_MAX_VIN
+	configuration->l_max_vin = HW_FIXED_L_MAX_VIN;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_START
+	configuration->l_battery_cut_start = HW_FIXED_L_BATTERY_CUT_START;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_END
+	configuration->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
 #endif
 
 	if (motor->m_conf.m_sensor_port_mode != configuration->m_sensor_port_mode) {
@@ -511,6 +562,7 @@ const char* mc_interface_fault_to_string(mc_fault_code fault) {
     case FAULT_CODE_PHASE_FILTER: return "FAULT_CODE_PHASE_FILTER";
     case FAULT_CODE_ENCODER_FAULT: return "FAULT_CODE_ENCODER_FAULT";
 	case FAULT_CODE_LV_OUTPUT_FAULT: return "FAULT_CODE_LV_OUTPUT_FAULT";
+	case FAULT_CODE_MOTOR_STALL: return "FAULT_CODE_MOTOR_STALL";
 	}
 
 	return "Unknown fault";
@@ -2529,6 +2581,162 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 	conf->lo_current_min = lo_min;
 }
 
+#if STALL_PROTECT_ENABLE
+static void reset_stall_protection(volatile motor_if_state_t *motor) {
+	motor->m_stall_rpm_ref = 0.0f;
+	motor->m_stall_active_ms = 0;
+	motor->m_stall_high_load_ms = 0;
+	motor->m_stall_output_ms = 0;
+	motor->m_stall_blank_ms = 0;
+	motor->m_stall_rpm_sign = 0;
+}
+#endif
+
+static void update_stall_protection(volatile motor_if_state_t *motor) {
+#if STALL_PROTECT_ENABLE
+	const bool is_motor_1 = motor == &m_motor_1;
+	const bool is_second_motor = !is_motor_1;
+
+	if (motor->m_fault_now != FAULT_CODE_NONE) {
+		reset_stall_protection(motor);
+		return;
+	}
+
+	mc_control_mode control_mode = mc_interface_get_control_mode();
+	if (control_mode == CONTROL_MODE_NONE ||
+			control_mode == CONTROL_MODE_CURRENT_BRAKE ||
+			control_mode == CONTROL_MODE_HANDBRAKE) {
+		reset_stall_protection(motor);
+		return;
+	}
+
+	float rpm_now = 0.0f;
+	if (motor->m_conf.motor_type == MOTOR_TYPE_FOC) {
+		rpm_now = DIR_MULT * mcpwm_foc_get_rpm_fast();
+	} else {
+		rpm_now = mc_interface_get_rpm();
+	}
+
+	const float rpm_abs = fabsf(rpm_now);
+	const float duty_abs = fabsf(mc_interface_get_duty_cycle_now());
+	const float current_abs = fabsf(mc_interface_get_tot_current_filtered());
+	const float current_limit = fmaxf(fabsf(motor->m_conf.lo_current_max), motor->m_conf.cc_min_current);
+	const bool is_outputting = duty_abs >= STALL_MIN_DUTY || current_abs >= STALL_MIN_CURRENT;
+	const bool high_duty = duty_abs >= STALL_HIGH_DUTY;
+	const bool high_current = current_abs >= (current_limit * STALL_HIGH_CURRENT_RATIO);
+	const bool is_high_duty_mode =
+			control_mode == CONTROL_MODE_DUTY ||
+			control_mode == CONTROL_MODE_SPEED ||
+			control_mode == CONTROL_MODE_POS ||
+			control_mode == CONTROL_MODE_OPENLOOP ||
+			control_mode == CONTROL_MODE_OPENLOOP_DUTY ||
+			control_mode == CONTROL_MODE_OPENLOOP_DUTY_PHASE;
+
+	if (!is_outputting) {
+		reset_stall_protection(motor);
+		return;
+	}
+
+	motor->m_stall_output_ms++;
+	if (motor->m_stall_output_ms == 1) {
+		motor->m_stall_blank_ms = STALL_STARTUP_BLANK_MS;
+	}
+
+	int8_t rpm_sign = 0;
+	if (rpm_now > 50.0f) {
+		rpm_sign = 1;
+	} else if (rpm_now < -50.0f) {
+		rpm_sign = -1;
+	}
+
+	if (motor->m_stall_rpm_sign != 0 && rpm_sign != 0 && rpm_sign != motor->m_stall_rpm_sign) {
+		motor->m_stall_blank_ms = STALL_STARTUP_BLANK_MS;
+		motor->m_stall_active_ms = 0;
+		motor->m_stall_high_load_ms = 0;
+		motor->m_stall_rpm_ref = rpm_abs;
+	}
+
+	if (rpm_sign != 0) {
+		motor->m_stall_rpm_sign = rpm_sign;
+	}
+
+	if (rpm_abs > motor->m_stall_rpm_ref) {
+		motor->m_stall_rpm_ref = rpm_abs;
+	} else {
+		UTILS_LP_FAST(motor->m_stall_rpm_ref, rpm_abs, STALL_REF_DECAY_FILTER);
+	}
+
+	if (motor->m_stall_blank_ms > 0) {
+		motor->m_stall_blank_ms--;
+		motor->m_stall_active_ms = 0;
+		motor->m_stall_high_load_ms = 0;
+		return;
+	}
+
+	if (motor->m_stall_rpm_ref < STALL_MIN_ERPM) {
+		motor->m_stall_active_ms = 0;
+	} else if (rpm_abs < (motor->m_stall_rpm_ref * STALL_SPEED_RATIO)) {
+		motor->m_stall_active_ms++;
+		if (motor->m_stall_active_ms >= STALL_HOLD_MS) {
+			mc_interface_set_fault_info("stall ref: %.0f, rpm: %.0f", 2, motor->m_stall_rpm_ref, rpm_abs);
+			mc_interface_fault_stop(FAULT_CODE_MOTOR_STALL, is_second_motor, false);
+			reset_stall_protection(motor);
+			return;
+		}
+	} else {
+		motor->m_stall_active_ms = 0;
+	}
+
+	const bool startup_fail =
+			is_high_duty_mode &&
+			high_duty &&
+			high_current &&
+			motor->m_stall_output_ms >= STALL_STARTUP_FAIL_MS &&
+			rpm_abs < STALL_STARTUP_FAIL_ERPM;
+	const bool running_high_load_stall =
+			is_high_duty_mode &&
+			high_duty &&
+			high_current &&
+			motor->m_stall_rpm_ref >= STALL_MIN_ERPM &&
+			rpm_abs < (motor->m_stall_rpm_ref * STALL_HIGH_SPEED_RATIO);
+
+	if (startup_fail || running_high_load_stall) {
+		motor->m_stall_high_load_ms++;
+		if (motor->m_stall_high_load_ms >= STALL_HIGH_HOLD_MS) {
+			if (startup_fail) {
+				mc_interface_set_fault_info("stall start duty: %.2f, curr: %.1f", 2, duty_abs, current_abs);
+			} else {
+				mc_interface_set_fault_info("stall load ref: %.0f, rpm: %.0f", 2, motor->m_stall_rpm_ref, rpm_abs);
+			}
+			mc_interface_fault_stop(FAULT_CODE_MOTOR_STALL, is_second_motor, false);
+			reset_stall_protection(motor);
+			return;
+		}
+	} else {
+		motor->m_stall_high_load_ms = 0;
+	}
+#else
+	(void)motor;
+#endif
+}
+
+static void play_stall_fault_beep(void) {
+	for (int i = 0;i < STALL_FAULT_BEEP_COUNT;i++) {
+		if (!mcpwm_foc_beep(STALL_FAULT_BEEP_FREQ_HZ,
+				STALL_FAULT_BEEP_TIME_S,
+				STALL_FAULT_BEEP_VOLTAGE)) {
+			break;
+		}
+
+		if (i < (STALL_FAULT_BEEP_COUNT - 1)) {
+			chThdSleepMilliseconds(STALL_FAULT_BEEP_GAP_MS);
+		}
+	}
+
+	mcpwm_foc_release_motor();
+	chThdSleepMilliseconds(2);
+}
+
 static volatile motor_if_state_t *motor_now(void) {
 #ifdef HW_HAS_DUAL_MOTORS
 	return mc_interface_motor_now() == 1 ? &m_motor_1 : &m_motor_2;
@@ -2587,6 +2795,7 @@ static void run_timer_tasks(volatile motor_if_state_t *motor) {
 	}
 
 	update_override_limits(motor, &motor->m_conf);
+	update_stall_protection(motor);
 
 	// Update auxiliary output
 	if (is_motor_1) {
@@ -3015,6 +3224,9 @@ static THD_FUNCTION(fault_stop_thread, arg) {
 
 		case MOTOR_TYPE_FOC:
 			mcpwm_foc_stop_pwm(fault_data_copy.is_second_motor);
+			if (fault_data_copy.fault_code == FAULT_CODE_MOTOR_STALL) {
+				play_stall_fault_beep();
+			}
 			break;
 
 		default:

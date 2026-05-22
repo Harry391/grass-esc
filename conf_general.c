@@ -439,6 +439,27 @@ __attribute__((section(".text2"))) void conf_general_read_mc_configuration(mc_co
 #ifdef HW_FIXED_L_SLOW_ABS_CURRENT
 	conf->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
 #endif
+#ifdef HW_FIXED_L_CURRENT_MAX
+	conf->l_current_max = HW_FIXED_L_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_CURRENT_MIN
+	conf->l_current_min = HW_FIXED_L_CURRENT_MIN;
+#endif
+#ifdef HW_FIXED_L_ABS_CURRENT_MAX
+	conf->l_abs_current_max = HW_FIXED_L_ABS_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_MIN_VIN
+	conf->l_min_vin = HW_FIXED_L_MIN_VIN;
+#endif
+#ifdef HW_FIXED_L_MAX_VIN
+	conf->l_max_vin = HW_FIXED_L_MAX_VIN;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_START
+	conf->l_battery_cut_start = HW_FIXED_L_BATTERY_CUT_START;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_END
+	conf->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
+#endif
 }
 
 /**
@@ -467,6 +488,27 @@ __attribute__((section(".text2"))) bool conf_general_store_mc_configuration(mc_c
 #endif
 #ifdef HW_FIXED_L_SLOW_ABS_CURRENT
 	conf->l_slow_abs_current = HW_FIXED_L_SLOW_ABS_CURRENT;
+#endif
+#ifdef HW_FIXED_L_CURRENT_MAX
+	conf->l_current_max = HW_FIXED_L_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_CURRENT_MIN
+	conf->l_current_min = HW_FIXED_L_CURRENT_MIN;
+#endif
+#ifdef HW_FIXED_L_ABS_CURRENT_MAX
+	conf->l_abs_current_max = HW_FIXED_L_ABS_CURRENT_MAX;
+#endif
+#ifdef HW_FIXED_L_MIN_VIN
+	conf->l_min_vin = HW_FIXED_L_MIN_VIN;
+#endif
+#ifdef HW_FIXED_L_MAX_VIN
+	conf->l_max_vin = HW_FIXED_L_MAX_VIN;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_START
+	conf->l_battery_cut_start = HW_FIXED_L_BATTERY_CUT_START;
+#endif
+#ifdef HW_FIXED_L_BATTERY_CUT_END
+	conf->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
 #endif
 
 	conf->crc = mc_interface_calc_crc(conf, is_motor_2);
