@@ -39,7 +39,7 @@ int32_t confgenerator_serialize_mcconf(uint8_t *buffer, const mc_configuration *
 	buffer[ind++] = (uint8_t)conf->l_temp_motor_end;
 	buffer_append_float16(buffer, conf->l_temp_accel_dec, 10000, &ind);
 	buffer_append_float16(buffer, conf->l_min_duty, 10000, &ind);
-	buffer_append_float16(buffer, conf->l_max_duty, 10000, &ind);
+	buffer_append_float16(buffer, conf_general_duty_to_display(conf->l_max_duty), 10000, &ind);
 	buffer_append_float32_auto(buffer, conf->l_watt_max, &ind);
 	buffer_append_float32_auto(buffer, conf->l_watt_min, &ind);
 	buffer_append_float16(buffer, conf->l_current_max_scale, 10000, &ind);
@@ -379,7 +379,7 @@ bool confgenerator_deserialize_mcconf(const uint8_t *buffer, mc_configuration *c
 	conf->l_temp_motor_end = buffer[ind++];
 	conf->l_temp_accel_dec = buffer_get_float16(buffer, 10000, &ind);
 	conf->l_min_duty = buffer_get_float16(buffer, 10000, &ind);
-	conf->l_max_duty = buffer_get_float16(buffer, 10000, &ind);
+	conf->l_max_duty = conf_general_duty_from_display(buffer_get_float16(buffer, 10000, &ind));
 	conf->l_watt_max = buffer_get_float32_auto(buffer, &ind);
 	conf->l_watt_min = buffer_get_float32_auto(buffer, &ind);
 	conf->l_current_max_scale = buffer_get_float16(buffer, 10000, &ind);

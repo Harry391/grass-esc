@@ -36,6 +36,14 @@
 #define MAX_CAN_AGE						0.1
 #define MIN_PULSES_WITHOUT_POWER		50
 
+#ifdef HW_PPM_PID_DUTY_CURRENT
+/* LS-style replacement for the PPM speed-PID modes. */
+#define DUTY_CURRENT_DEADBAND			0.01f
+#define DUTY_CURRENT_TAPER_WINDOW		0.10f
+#define DUTY_CURRENT_BRAKE_CURRENT		2.5f
+#define DUTY_CURRENT_BRAKE_MIN_ERPM		800.0f
+#endif
+
 // Threads
 static THD_FUNCTION(ppm_thread, arg);
 __attribute__((section(".ram4"))) static THD_WORKING_AREA(ppm_thread_wa, 512);
@@ -44,6 +52,10 @@ static volatile bool ppm_rx = false;
 
 // Private functions
 static void servodec_func(void);
+#ifdef HW_PPM_PID_DUTY_CURRENT
+static float duty_current_command(float throttle, float duty_now, float rpm_now,
+		const volatile mc_configuration *mcconf);
+#endif
 
 // Private variables
 static volatile bool is_running = false;
@@ -112,6 +124,49 @@ static void servodec_func(void) {
 	chEvtSignalI(ppm_tp, (eventmask_t) 1);
 	chSysUnlockFromISR();
 }
+
+#ifdef HW_PPM_PID_DUTY_CURRENT
+static float duty_current_command(float throttle, float duty_now, float rpm_now,
+		const volatile mc_configuration *mcconf) {
+	const float throttle_abs = fabsf(throttle);
+	float current_cmd = 0.0f;
+
+	if (throttle_abs < 0.001f) {
+		if (fabsf(rpm_now) > DUTY_CURRENT_BRAKE_MIN_ERPM) {
+			current_cmd = rpm_now > 0.0f ?
+					-DUTY_CURRENT_BRAKE_CURRENT : DUTY_CURRENT_BRAKE_CURRENT;
+		}
+	} else {
+		const float direction = throttle > 0.0f ? 1.0f : -1.0f;
+
+		if ((rpm_now * direction) < -DUTY_CURRENT_BRAKE_MIN_ERPM) {
+			current_cmd = rpm_now > 0.0f ?
+					-DUTY_CURRENT_BRAKE_CURRENT : DUTY_CURRENT_BRAKE_CURRENT;
+		} else {
+			const float duty_target = throttle_abs * mcconf->l_max_duty;
+			const float duty_along_target = duty_now * direction;
+			const float duty_error = duty_target - duty_along_target;
+
+			if (duty_error < -DUTY_CURRENT_DEADBAND) {
+				current_cmd = -direction * DUTY_CURRENT_BRAKE_CURRENT;
+			} else if (duty_error > DUTY_CURRENT_DEADBAND) {
+				float taper_window = duty_target * 0.5f;
+				utils_truncate_number(&taper_window, 0.02f, DUTY_CURRENT_TAPER_WINDOW);
+
+				float taper = (duty_error - DUTY_CURRENT_DEADBAND) / taper_window;
+				utils_truncate_number(&taper, 0.0f, 1.0f);
+
+				const float current_limit = direction > 0.0f ?
+						mcconf->lo_current_max : fabsf(mcconf->lo_current_min);
+				current_cmd = direction * throttle_abs * current_limit * taper;
+			}
+		}
+	}
+
+	utils_truncate_number(&current_cmd, mcconf->lo_current_min, mcconf->lo_current_max);
+	return current_cmd;
+}
+#endif
 
 static THD_FUNCTION(ppm_thread, arg) {
 	(void)arg;
@@ -225,6 +280,10 @@ static THD_FUNCTION(ppm_thread, arg) {
 		bool current_mode_brake = false;
 		bool send_current = false;
 		bool send_duty = false;
+#ifdef HW_PPM_PID_DUTY_CURRENT
+		bool duty_current_mode = false;
+		bool duty_current_keep_alive = false;
+#endif
 		float rpm_local = mc_interface_get_rpm();
 		float rpm_lowest = rpm_local;
 		float rpm_highest = rpm_local;
@@ -351,9 +410,19 @@ static THD_FUNCTION(ppm_thread, arg) {
 				send_duty = true;
 			}
 			break;
-
 		case PPM_CTRL_TYPE_PID:
 		case PPM_CTRL_TYPE_PID_NOREV:
+		#ifdef HW_PPM_PID_DUTY_CURRENT
+			current_mode = true;
+			duty_current_mode = true;
+			duty_current_keep_alive = fabsf(servo_val) >= 0.001f;
+			current = duty_current_command(servo_val,
+					mc_interface_get_duty_cycle_now(), rpm_now, mcconf);
+
+			if (fabsf(servo_val) < 0.001) {
+				pulses_without_power++;
+			}
+		#else
 			if (fabsf(servo_val) < 0.001) {
 				pulses_without_power++;
 			}
@@ -362,6 +431,7 @@ static THD_FUNCTION(ppm_thread, arg) {
 				mc_interface_set_pid_speed(servo_val * config.pid_max_erpm);
 				send_current = true;
 			}
+		#endif
 			break;
 
 		case PPM_CTRL_TYPE_PID_POSITION_180: // -180 to 180. center ppm safestart
@@ -409,6 +479,9 @@ static THD_FUNCTION(ppm_thread, arg) {
 			if (current_mode) {
 				current = 0.0;
 			}
+#ifdef HW_PPM_PID_DUTY_CURRENT
+			duty_current_keep_alive = false;
+#endif
 		} else {
 			servoError = false;
 		}
@@ -496,6 +569,29 @@ static THD_FUNCTION(ppm_thread, arg) {
 			}
 		}
 //CTRL TYPE CURRENT
+#ifdef HW_PPM_PID_DUTY_CURRENT
+		if (current_mode && duty_current_mode) {
+			/* Keep the zero-torque current loop alive while a non-zero duty
+			 * target is held, otherwise PWM can stop and repeatedly restart. */
+			if (duty_current_keep_alive && mc_interface_get_state() == MC_STATE_RUNNING) {
+				mc_interface_set_current_off_delay(0.05f);
+			}
+
+			mc_interface_set_current(current);
+
+			if (config.multi_esc) {
+				for (int i = 0;i < CAN_STATUS_MSGS_TO_STORE;i++) {
+					can_status_msg *msg = comm_can_get_status_msg_index(i);
+
+					if (msg->id >= 0 && UTILS_AGE_S(msg->rx_time) < MAX_CAN_AGE) {
+						comm_can_set_current(msg->id, current);
+					}
+				}
+			}
+
+			current_mode = false;
+		}
+#endif
 		if (current_mode) {
 			if (current_mode_brake) { //If braking applied
 				mc_interface_set_brake_current(fabsf(current));

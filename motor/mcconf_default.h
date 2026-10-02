@@ -36,16 +36,16 @@
 
 // Limits
 #ifndef MCCONF_L_CURRENT_MAX
-#define MCCONF_L_CURRENT_MAX			60.0	// Current limit in Amperes (Upper)
+#define MCCONF_L_CURRENT_MAX			120.0	// Current limit in Amperes (Upper)
 #endif
 #ifndef MCCONF_L_CURRENT_MIN
-#define MCCONF_L_CURRENT_MIN			-60.0	// Current limit in Amperes (Lower)
+#define MCCONF_L_CURRENT_MIN			-15.0	// Current limit in Amperes (Lower)
 #endif
 #ifndef MCCONF_L_IN_CURRENT_MAX
 #define MCCONF_L_IN_CURRENT_MAX			99.0	// Input current limit in Amperes (Upper)
 #endif
 #ifndef MCCONF_L_IN_CURRENT_MIN
-#define MCCONF_L_IN_CURRENT_MIN			-60.0	// Input current limit in Amperes (Lower)
+#define MCCONF_L_IN_CURRENT_MIN			-15.0	// Input current limit in Amperes (Lower)
 #endif
 #ifndef MCCONF_L_IN_CURRENT_MAP_START
 #define MCCONF_L_IN_CURRENT_MAP_START	1.0		// Input current to Q axis current limit map start
@@ -93,10 +93,10 @@
 #define MCCONF_L_MAX_DUTY				0.95	// Maximum duty cycle
 #endif
 #ifndef MCCONF_L_CURR_MAX_RPM_FBRAKE
-#define MCCONF_L_CURR_MAX_RPM_FBRAKE	300		// Maximum electrical RPM to use full brake at
+#define MCCONF_L_CURR_MAX_RPM_FBRAKE	150		// Maximum electrical RPM to use full brake at
 #endif
 #ifndef MCCONF_L_CURR_MAX_RPM_FBRAKE_CC
-#define MCCONF_L_CURR_MAX_RPM_FBRAKE_CC	1500	// Maximum electrical RPM to use full brake at with current control
+#define MCCONF_L_CURR_MAX_RPM_FBRAKE_CC	800	// Maximum electrical RPM to use full brake at with current control
 #endif
 #ifndef MCCONF_L_LIM_TEMP_FET_START
 #define MCCONF_L_LIM_TEMP_FET_START		85.0	// MOSFET temperature where current limiting should begin
@@ -660,5 +660,6 @@
 #ifndef MCCONF_BMS_FWD_CAN_MODE
 #define MCCONF_BMS_FWD_CAN_MODE			BMS_FWD_CAN_MODE_DISABLED
 #endif
+#define MOTOR_SOFT_START_TIME 10
 
 #endif /* MCCONF_DEFAULT_H_ */

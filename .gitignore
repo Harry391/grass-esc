@@ -12,6 +12,10 @@ package/
 .DS_Store
 workspace.code-workspace
 
+# Local comparison checkout and editor/backup artifacts
+.tmp_vesc_pkg_official/
+motor/mc_interface.c4111
+
 # Qt project settings
 *.pro.user
 *.pro.shared

@@ -39,6 +39,17 @@ static volatile bool output_disabled_now = false;
 
 // Private functions
 static void output_vt_cb(void *arg);
+static void apply_hw_limits_appconf(app_configuration *conf);
+
+static void apply_hw_limits_appconf(app_configuration *conf) {
+	(void)conf;
+#ifdef HW_FIXED_APPCONF_APP_TO_USE
+	conf->app_to_use = HW_FIXED_APPCONF_APP_TO_USE;
+#endif
+#ifdef HW_FIXED_APPCONF_PPM_CTRL_TYPE
+	conf->app_ppm_conf.ctrl_type = HW_FIXED_APPCONF_PPM_CTRL_TYPE;
+#endif
+}
 
 const app_configuration* app_get_configuration(void) {
 	return &appconf;
@@ -51,6 +62,7 @@ const app_configuration* app_get_configuration(void) {
  * The new configuration to use.
  */
 void app_set_configuration(app_configuration *conf) {
+	apply_hw_limits_appconf(conf);
 	bool app_changed = appconf.app_to_use != conf->app_to_use;
 
 	if (!app_changed) {
@@ -58,7 +70,9 @@ void app_set_configuration(app_configuration *conf) {
 	}
 
 	appconf = *conf;
-
+	//
+	appconf.app_ppm_conf.ramp_time_pos = 3.0;
+    appconf.app_ppm_conf.ramp_time_neg = 5.0;
 	if (app_changed) {
 		app_ppm_stop();
 		app_adc_stop();
@@ -218,4 +232,3 @@ unsigned short app_calc_crc(app_configuration* conf) {
 	conf->crc = crc_old;
 	return crc_new;
 }
-

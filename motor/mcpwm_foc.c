@@ -3425,13 +3425,12 @@ void mcpwm_foc_adc_int_handler(void *p, uint32_t flags) {
 						utils_truncate_number_abs(&iq_set_tmp, conf_now->foc_sl_openloop_max_q);
 					}
 
-#if HW_FOC_SENSORLESS_STARTUP_MIN_IQ > 0.0f
-					if (motor_now->m_control_mode != CONTROL_MODE_CURRENT_BRAKE &&
+					if (HW_FOC_SENSORLESS_STARTUP_MIN_IQ > 0.0f &&
+							motor_now->m_control_mode != CONTROL_MODE_CURRENT_BRAKE &&
 							iq_set_tmp > 0.0f &&
 							iq_set_tmp < HW_FOC_SENSORLESS_STARTUP_MIN_IQ) {
 						iq_set_tmp = HW_FOC_SENSORLESS_STARTUP_MIN_IQ;
 					}
-#endif
 				} else {
 					motor_now->m_motor_state.phase = motor_now->m_phase_now_observer;
 				}
@@ -3533,13 +3532,26 @@ void mcpwm_foc_adc_int_handler(void *p, uint32_t flags) {
 		id_set_tmp -= motor_now->m_i_fw_set;
 		iq_set_tmp -= SIGN(mod_q) * motor_now->m_i_fw_set * conf_now->foc_fw_q_current_factor;
 
-		// Apply current limits
-		// TODO: Consider D axis current for the input current as well. Currently this is done using
-		// l_in_current_map_start in update_override_limits.
+		// Apply current limits. On boards with strict input-power limiting, include
+		// the D-axis contribution instead of relying only on the slower feedback map.
 		if (mod_q > 0.001) {
+		#ifdef HW_STRICT_INPUT_POWER_LIMIT
+			const float i_in_d = motor_now->m_motor_state.mod_d * id_set_tmp;
+			utils_truncate_number(&iq_set_tmp,
+					(conf_now->lo_in_current_min - i_in_d) / mod_q,
+					(conf_now->lo_in_current_max - i_in_d) / mod_q);
+		#else
 			utils_truncate_number(&iq_set_tmp, conf_now->lo_in_current_min / mod_q, conf_now->lo_in_current_max / mod_q);
+		#endif
 		} else if (mod_q < -0.001) {
+		#ifdef HW_STRICT_INPUT_POWER_LIMIT
+			const float i_in_d = motor_now->m_motor_state.mod_d * id_set_tmp;
+			utils_truncate_number(&iq_set_tmp,
+					(conf_now->lo_in_current_max - i_in_d) / mod_q,
+					(conf_now->lo_in_current_min - i_in_d) / mod_q);
+		#else
 			utils_truncate_number(&iq_set_tmp, conf_now->lo_in_current_max / mod_q, conf_now->lo_in_current_min / mod_q);
+		#endif
 		}
 
 		if (mod_q > 0.0) {

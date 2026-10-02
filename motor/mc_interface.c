@@ -48,25 +48,25 @@
 
 // Macros
 #define DIR_MULT		(motor_now()->m_conf.m_invert_direction ? -1.0 : 1.0)
-#define STALL_PROTECT_ENABLE			0
-#define STALL_MIN_ERPM					400.0f
-#define STALL_MIN_CURRENT				3.0f
-#define STALL_MIN_DUTY					0.08f
-#define STALL_SPEED_RATIO				0.2f
-#define STALL_HOLD_MS					50
-#define STALL_HIGH_DUTY				0.30f
-#define STALL_HIGH_CURRENT_RATIO		0.60f
-#define STALL_HIGH_SPEED_RATIO			0.40f
+#define STALL_PROTECT_ENABLE			1
+#define STALL_MIN_ERPM					20.0f
+#define STALL_MIN_CURRENT				40.0f
+#define STALL_MIN_DUTY					0.1f
+#define STALL_SPEED_RATIO				0.3f
+#define STALL_HOLD_MS					30
+#define STALL_HIGH_DUTY				    0.30f
+#define STALL_HIGH_CURRENT_RATIO		0.80f
+#define STALL_HIGH_SPEED_RATIO			0.60f
 #define STALL_HIGH_HOLD_MS				30
 #define STALL_STARTUP_FAIL_ERPM			600.0f
 #define STALL_STARTUP_FAIL_MS			200
 #define STALL_STARTUP_BLANK_MS			150
 #define STALL_REF_DECAY_FILTER			0.005f
-#define STALL_FAULT_BEEP_COUNT			5
+#define STALL_FAULT_BEEP_COUNT			2
 #define STALL_FAULT_BEEP_FREQ_HZ		659.25f
 #define STALL_FAULT_BEEP_TIME_S			0.10f
 #define STALL_FAULT_BEEP_GAP_MS			120
-#define STALL_FAULT_BEEP_VOLTAGE		6.0f
+#define STALL_FAULT_BEEP_VOLTAGE		1.0f
 
 // Global variables
 volatile uint16_t ADC_Value[HW_ADC_CHANNELS + HW_ADC_CHANNELS_EXTRA];
@@ -377,6 +377,14 @@ void mc_interface_set_configuration(mc_configuration *configuration) {
 #ifdef HW_FIXED_L_BATTERY_CUT_END
 	configuration->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
 #endif
+#ifdef HW_FIXED_L_WATT_MAX
+	configuration->l_watt_max = HW_FIXED_L_WATT_MAX;
+#endif
+#ifdef HW_FIXED_L_IN_CURRENT_MAP_START
+	configuration->l_in_current_map_start = HW_FIXED_L_IN_CURRENT_MAP_START;
+#endif
+
+	conf_general_apply_duty_display_limit(configuration);
 
 	if (motor->m_conf.m_sensor_port_mode != configuration->m_sensor_port_mode) {
 		encoder_deinit();

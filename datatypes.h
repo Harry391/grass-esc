@@ -1129,7 +1129,6 @@ typedef enum {
 	COMM_CAN_UPDATE_BAUD_ALL				= 158,
 
 	COMM_MOTOR_ESTOP						= 159,
-	COMM_PRIVATE_FW_VERSION				= 200,
 } COMM_PACKET_ID;
 
 // CAN commands

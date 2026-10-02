@@ -62,6 +62,35 @@ __attribute__((section(".ram4"))) volatile backup_data g_backup;
 // Private functions
 static bool read_eeprom_var(eeprom_var *v, int address, uint16_t base);
 static bool store_eeprom_var(eeprom_var *v, int address, uint16_t base);
+static void apply_hw_limits_appconf(app_configuration *conf);
+
+static void apply_hw_limits_appconf(app_configuration *conf) {
+	(void)conf;
+#ifdef HW_FIXED_APPCONF_APP_TO_USE
+	conf->app_to_use = HW_FIXED_APPCONF_APP_TO_USE;
+#endif
+#ifdef HW_FIXED_APPCONF_PPM_CTRL_TYPE
+	conf->app_ppm_conf.ctrl_type = HW_FIXED_APPCONF_PPM_CTRL_TYPE;
+#endif
+}
+
+float conf_general_duty_to_display(float duty) {
+	duty *= HW_DUTY_DISPLAY_SCALE;
+	utils_truncate_number(&duty, -1.0f, 1.0f);
+	return duty;
+}
+
+float conf_general_duty_from_display(float duty) {
+	utils_truncate_number(&duty, -1.0f, 1.0f);
+	return duty / HW_DUTY_DISPLAY_SCALE;
+}
+
+void conf_general_apply_duty_display_limit(mc_configuration *conf) {
+	const float actual_max = 1.0f / HW_DUTY_DISPLAY_SCALE;
+	if (conf->l_max_duty > actual_max) {
+		conf->l_max_duty = actual_max;
+	}
+}
 
 __attribute__((section(".text2"))) void conf_general_init(void) {
 	// First, make sure that all relevant virtual addresses are assigned for page swapping.
@@ -348,6 +377,8 @@ __attribute__((section(".text2"))) void conf_general_read_app_configuration(app_
 	if (!is_ok) {
 		confgenerator_set_defaults_appconf(conf);
 	}
+
+	apply_hw_limits_appconf(conf);
 }
 
 /**
@@ -371,6 +402,7 @@ __attribute__((section(".text2"))) bool conf_general_store_app_configuration(app
 	uint8_t *conf_addr = (uint8_t*)conf;
 	uint16_t var;
 
+	apply_hw_limits_appconf(conf);
 	conf->crc = app_calc_crc(conf);
 
 	FLASH_Unlock();
@@ -460,6 +492,14 @@ __attribute__((section(".text2"))) void conf_general_read_mc_configuration(mc_co
 #ifdef HW_FIXED_L_BATTERY_CUT_END
 	conf->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
 #endif
+#ifdef HW_FIXED_L_WATT_MAX
+	conf->l_watt_max = HW_FIXED_L_WATT_MAX;
+#endif
+#ifdef HW_FIXED_L_IN_CURRENT_MAP_START
+	conf->l_in_current_map_start = HW_FIXED_L_IN_CURRENT_MAP_START;
+#endif
+
+	conf_general_apply_duty_display_limit(conf);
 }
 
 /**
@@ -510,6 +550,14 @@ __attribute__((section(".text2"))) bool conf_general_store_mc_configuration(mc_c
 #ifdef HW_FIXED_L_BATTERY_CUT_END
 	conf->l_battery_cut_end = HW_FIXED_L_BATTERY_CUT_END;
 #endif
+#ifdef HW_FIXED_L_WATT_MAX
+	conf->l_watt_max = HW_FIXED_L_WATT_MAX;
+#endif
+#ifdef HW_FIXED_L_IN_CURRENT_MAP_START
+	conf->l_in_current_map_start = HW_FIXED_L_IN_CURRENT_MAP_START;
+#endif
+
+	conf_general_apply_duty_display_limit(conf);
 
 	conf->crc = mc_interface_calc_crc(conf, is_motor_2);
 

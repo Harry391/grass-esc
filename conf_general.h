@@ -21,8 +21,8 @@
 #define CONF_GENERAL_H_
 
 // Firmware version
-#define FW_VERSION_MAJOR			1
-#define FW_VERSION_MINOR			0
+#define FW_VERSION_MAJOR			6
+#define FW_VERSION_MINOR			06
 // Set to 0 for building a release and iterate during beta test builds
 #define FW_TEST_VERSION_NUMBER		4
 
@@ -88,6 +88,10 @@
 #include "hw.h"
 #include "mcconf_default.h"
 #include "appconf_default.h"
+
+#ifndef HW_DUTY_DISPLAY_SCALE
+#define HW_DUTY_DISPLAY_SCALE		1.0f
+#endif
 
 /*
  * Enable blackmagic probe output on SWD port
@@ -181,6 +185,9 @@ void conf_general_read_app_configuration(app_configuration *conf);
 bool conf_general_store_app_configuration(app_configuration *conf);
 void conf_general_read_mc_configuration(mc_configuration *conf, bool is_motor_2);
 bool conf_general_store_mc_configuration(mc_configuration *conf, bool is_motor_2);
+float conf_general_duty_to_display(float duty);
+float conf_general_duty_from_display(float duty);
+void conf_general_apply_duty_display_limit(mc_configuration *conf);
 bool conf_general_detect_motor_param(float current, float min_rpm, float low_duty,
 									 float *int_limit, float *bemf_coupling_k, int8_t *hall_table, int *hall_res);
 bool conf_general_measure_flux_linkage(float current, float duty,

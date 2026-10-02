@@ -103,10 +103,10 @@
 #define VIN_R2					2200.0 //
 #endif
 #ifndef CURRENT_AMP_GAIN
-#define CURRENT_AMP_GAIN		20.0 //
+#define CURRENT_AMP_GAIN		40.0 //
 #endif
 #ifndef CURRENT_SHUNT_RES
-#define CURRENT_SHUNT_RES		(0.0005 / 3.0) // (jaykup) updated
+#define CURRENT_SHUNT_RES		(0.0003 / 2.0) // (jaykup) updated
 #endif
 
 // Input voltage
@@ -269,7 +269,7 @@
 #define HW_LIM_CURRENT			-300.0, 300.0 // (jaykup) phase amps based on Flipsky website
 #define HW_LIM_CURRENT_IN		-280.0, 280.0 // (jaykup) battery amps based on Flipsky website
 #define HW_LIM_CURRENT_ABS		0.0, 450 // (jaykup) abs phase amps 1.5x burst
-#define HW_LIM_VIN				6.0, 120.0 // (jaykup) based on Flipsky 75_100 firmware
+#define HW_LIM_VIN				8.0, 120.0 // (jaykup) based on Flipsky 75_100 firmware
 #define HW_LIM_ERPM				-200e3, 200e3 // (jaykup)
 #define HW_LIM_DUTY_MIN			0.0, 0.1
 #define HW_LIM_DUTY_MAX			0.0, 0.99

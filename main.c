@@ -107,6 +107,8 @@ static volatile bool m_init_done = false;
 #define STARTUP_SOUND_CELL_MAX			30
 #define STARTUP_SOUND_VOLTAGE_SAMPLES	16
 #define STARTUP_SOUND_VOLTAGE_SAMPLE_MS	2
+#define STARTUP_READY_SOUND_TIME_S		0.600
+#define STARTUP_READY_SOUND_VOLTAGE		6.0
 
 static int startup_sound_detect_cells(void) {
 #if STARTUP_SOUND_ENABLED
@@ -133,10 +135,45 @@ static int startup_sound_detect_cells(void) {
 #endif
 }
 
+static mc_configuration *startup_sound_prepare_bldc(void) {
+#if STARTUP_SOUND_ENABLED
+	const volatile mc_configuration *conf = mc_interface_get_configuration();
+	if (conf->motor_type != MOTOR_TYPE_BLDC) {
+		return 0;
+	}
+
+	mc_configuration *bldc_conf = mempools_alloc_mcconf();
+	if (!bldc_conf) {
+		return 0;
+	}
+
+	*bldc_conf = *conf;
+	bldc_conf->motor_type = MOTOR_TYPE_FOC;
+	mc_interface_set_configuration(bldc_conf);
+	bldc_conf->motor_type = MOTOR_TYPE_BLDC;
+
+	return bldc_conf;
+#else
+	return 0;
+#endif
+}
+
+static void startup_sound_restore_bldc(mc_configuration *bldc_conf) {
+#if STARTUP_SOUND_ENABLED
+	if (bldc_conf) {
+		mc_interface_set_configuration(bldc_conf);
+		mempools_free_mcconf(bldc_conf);
+	}
+#else
+	(void)bldc_conf;
+#endif
+}
+
 static void startup_sound_play_motor(int motor, int cells) {
 #if STARTUP_SOUND_ENABLED
 	int motor_old = mc_interface_get_motor_thread();
 	mc_interface_select_motor_thread(motor);
+	mc_configuration *bldc_conf = startup_sound_prepare_bldc();
 
 	const volatile mc_configuration *conf = mc_interface_get_configuration();
 	if (conf->motor_type == MOTOR_TYPE_FOC &&
@@ -154,6 +191,7 @@ static void startup_sound_play_motor(int motor, int cells) {
 		chThdSleepMilliseconds(2);
 	}
 
+	startup_sound_restore_bldc(bldc_conf);
 	mc_interface_select_motor_thread(motor_old);
 #else
 	(void)motor;
@@ -167,6 +205,36 @@ static void startup_sound_play(void) {
 	startup_sound_play_motor(1, cells);
 #ifdef HW_HAS_DUAL_MOTORS
 	startup_sound_play_motor(2, cells);
+#endif
+}
+
+static void startup_ready_sound_play_motor(int motor) {
+#if STARTUP_SOUND_ENABLED
+	int motor_old = mc_interface_get_motor_thread();
+	mc_interface_select_motor_thread(motor);
+	mc_configuration *bldc_conf = startup_sound_prepare_bldc();
+
+	const volatile mc_configuration *conf = mc_interface_get_configuration();
+	if (conf->motor_type == MOTOR_TYPE_FOC &&
+			mc_interface_get_fault() == FAULT_CODE_NONE) {
+		mcpwm_foc_beep(STARTUP_SOUND_FREQ_HZ,
+				STARTUP_READY_SOUND_TIME_S,
+				STARTUP_READY_SOUND_VOLTAGE);
+		mcpwm_foc_release_motor();
+		chThdSleepMilliseconds(2);
+	}
+
+	startup_sound_restore_bldc(bldc_conf);
+	mc_interface_select_motor_thread(motor_old);
+#else
+	(void)motor;
+#endif
+}
+
+static void startup_ready_sound_play(void) {
+	startup_ready_sound_play_motor(1);
+#ifdef HW_HAS_DUAL_MOTORS
+	startup_ready_sound_play_motor(2);
 #endif
 }
 
@@ -452,6 +520,7 @@ int main(void) {
 
 	chThdSleepMilliseconds(500);
 	m_init_done = true;
+	startup_ready_sound_play();
 
 #ifdef BOOT_OK_GPIO
 	palSetPad(BOOT_OK_GPIO, BOOT_OK_PIN);

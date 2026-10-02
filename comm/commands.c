@@ -228,7 +228,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 	}
 
 	switch (packet_id) {
-	case COMM_PRIVATE_FW_VERSION: {
+	case COMM_FW_VERSION: {
 		int32_t ind = 0;
 		uint8_t send_buffer[65];
 		send_buffer[ind++] = COMM_FW_VERSION;
@@ -413,7 +413,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 			buffer_append_float32(send_buffer, mc_interface_read_reset_avg_iq(), 1e2, &ind);
 		}
 		if (mask & ((uint32_t)1 << 6)) {
-			buffer_append_float16(send_buffer, mc_interface_get_duty_cycle_now(), 1e3, &ind);
+			buffer_append_float16(send_buffer, conf_general_duty_to_display(mc_interface_get_duty_cycle_now()), 1e3, &ind);
 		}
 		if (mask & ((uint32_t)1 << 7)) {
 			buffer_append_float32(send_buffer, mc_interface_get_rpm_mechanical(), 1e0, &ind);
@@ -484,7 +484,8 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 
 	case COMM_SET_DUTY: {
 		int32_t ind = 0;
-		mc_interface_set_duty((float)buffer_get_int32(data, &ind) / 100000.0);
+		mc_interface_set_duty(conf_general_duty_from_display(
+				(float)buffer_get_int32(data, &ind) / 100000.0));
 		timeout_reset();
 	} break;
 
@@ -823,7 +824,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 			buffer_append_float32(send_buffer, val.current_in_tot, 1e2, &ind);
 		}
 		if (mask & ((uint32_t)1 << 4)) {
-			buffer_append_float16(send_buffer, mc_interface_get_duty_cycle_now(), 1e3, &ind);
+			buffer_append_float16(send_buffer, conf_general_duty_to_display(mc_interface_get_duty_cycle_now()), 1e3, &ind);
 		}
 		if (mask & ((uint32_t)1 << 5)) {
 			buffer_append_float32(send_buffer, mc_interface_get_rpm_mechanical(), 1e0, &ind);
@@ -937,7 +938,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 		}
 
 		mcconf->l_min_duty = buffer_get_float32_auto(data, &ind);
-		mcconf->l_max_duty = buffer_get_float32_auto(data, &ind);
+		mcconf->l_max_duty = conf_general_duty_from_display(buffer_get_float32_auto(data, &ind));
 		mcconf->l_watt_min = buffer_get_float32_auto(data, &ind) / controller_num;
 		mcconf->l_watt_max = buffer_get_float32_auto(data, &ind) / controller_num;
 
@@ -1004,7 +1005,7 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 		buffer_append_float32_auto(send_buffer, mcconf->l_min_erpm, &ind);
 		buffer_append_float32_auto(send_buffer, mcconf->l_max_erpm, &ind);
 		buffer_append_float32_auto(send_buffer, mcconf->l_min_duty, &ind);
-		buffer_append_float32_auto(send_buffer, mcconf->l_max_duty, &ind);
+		buffer_append_float32_auto(send_buffer, conf_general_duty_to_display(mcconf->l_max_duty), &ind);
 		buffer_append_float32_auto(send_buffer, mcconf->l_watt_min, &ind);
 		buffer_append_float32_auto(send_buffer, mcconf->l_watt_max, &ind);
 		buffer_append_float32_auto(send_buffer, mcconf->l_in_current_min, &ind);
